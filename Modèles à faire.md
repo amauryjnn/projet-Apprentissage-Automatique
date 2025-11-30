@@ -59,6 +59,120 @@ $$\text{Coût Total} = \underbrace{\frac{1}{n} \sum_{i=1}^{n} \text{Log-Loss}_i}
 
 ---
 
+### Différences fondamentales
+
+#### **BAGGING** = **B**ootstrap **Agg**regat**ing**
+
+**Principe :**
+- **Bootstrap** : Rééchantillonnage **avec remise** (on peut tirer la même observation plusieurs fois)
+- **Aggregating** : Agrégation des résultats (vote simple ou moyenne)
+
+**Construction :** Les modèles sont entraînés **en parallèle** et indépendamment les uns des autres.
+
+**Stratégie :** Chaque modèle reçoit un sous-ensemble aléatoire différent des données. Aucun modèle n'apprend des erreurs du précédent.
+
+**Combinaison finale :** Vote démocratique (poids égaux) ou moyenne arithmétique.
+
+**Réduit :** La **variance** (surapprentissage)
+
+**Exemples :** Random Forest, ExtraTreesClassifier
+
+---
+
+#### **BOOSTING** = **Amplification progressive**
+
+**Principe :**
+- Vient de "boost" (amplifier, renforcer)
+- Les modèles s'améliorent **progressivement** en corrigeant les erreurs des précédents
+
+**Construction :** Les modèles sont entraînés **séquentiellement** et dépendent les uns des autres.
+
+**Stratégie :** 
+1. Entraîner un 1er modèle sur les données
+2. Identifier ses erreurs
+3. Entraîner un 2e modèle en mettant plus de poids sur ces erreurs
+4. Répéter jusqu'à N modèles
+
+**Combinaison finale :** Somme pondérée (poids adapté à la performance de chaque modèle)
+
+**Réduit :** Le **biais** (sous-apprentissage)
+
+**Exemples :** XGBoost, LightGBM, AdaBoost
+
+---
+
+### Tableau comparatif : Bagging vs Boosting
+
+| Aspect | **Bagging** | **Boosting** |
+|--------|-----------|-----------|
+| **Construction** | Parallèle (indépendants) | Séquentielle (dépendants) |
+| **Données** | Bootstrap : sous-ensembles aléatoires avec remise | Tous les données, mais pondération adaptative |
+| **Focus du modèle suivant** | Aucun (chaque modèle est identique) | **Sur les erreurs du précédent** |
+| **Combinaison finale** | Vote/moyenne (poids égaux) | Combinaison pondérée (poids adapté) |
+| **Réduit** | ↓ **Variance** (surapprentissage) | ↓ **Biais** (sous-apprentissage) |
+| **Vitesse d'entraînement** | Rapide (parallélisable) | Lent (séquentiel) |
+| **Surapprentissage** | Basse | Moyenne-haute (risque d'overfitting) |
+| **Cas d'usage** | Modèles instables, beaucoup de données | Modèles faibles, besoin de précision max |
+
+---
+
+### Visualisation conceptuelle
+
+#### Bagging (Parallèle)
+
+```
+Données originales
+       ↓
+   ┌───┴───┬───────┬───────┐
+   ↓       ↓       ↓       ↓
+[Arbre1] [Arbre2] [Arbre3] [Arbre4]  ← Entraînés indépendamment
+   ↓       ↓       ↓       ↓
+   └───┬───┴───┬───┴───┬───┘
+       ↓       ↓       ↓
+    Vote/Moyenne
+       ↓
+    Prédiction finale
+```
+
+**Exemple Random Forest :**
+- Crée 100 sous-ensembles bootstrap de tes données
+- Entraîne 100 arbres **en parallèle** (chacun sur un sous-ensemble différent)
+- Combine les votes : si 60 arbres disent "approuvé" et 40 disent "rejeté" → **"approuvé"**
+
+---
+
+#### Boosting (Séquentiel)
+
+```
+Données originales
+       ↓
+   [Modèle 1] ← Entraîné sur les données
+       ↓
+    Erreurs ?
+       ↓
+   [Modèle 2] ← Entraîné en mettant plus de poids sur les erreurs du Modèle 1
+       ↓
+    Encore des erreurs ?
+       ↓
+   [Modèle 3] ← Entraîné en mettant plus de poids sur les erreurs du Modèle 2
+       ↓
+    ... (répéter N fois)
+       ↓
+   Combinaison pondérée de tous les modèles
+       ↓
+    Prédiction finale
+```
+
+**Exemple XGBoost :**
+- Crée un 1er arbre qui fait des erreurs
+- Crée un 2e arbre qui se concentre sur corriger ces erreurs
+- Crée un 3e arbre qui corrige les erreurs restantes
+- Les prédictions finales = somme pondérée des 3 arbres
+
+---
+
+
+
 ## 2. Méthodes d'Ensemble - Bagging (Parallélisation)
 
 Ces méthodes construisent plusieurs modèles indépendants en parallèle et font la moyenne de leurs prédictions pour réduire la variance (surapprentissage).
@@ -66,6 +180,42 @@ Ces méthodes construisent plusieurs modèles indépendants en parallèle et fon
 ### Random Forest Classifier (Déjà implémenté)
 **Particularité :** Agrégation de multiples arbres de décision entraînés sur des sous-ensembles aléatoires de données (bootstrap) et de features.
 **Pourquoi ce modèle :** Très robuste, gère naturellement les interactions non-linéaires et nécessite peu de prétraitement (bien que le scaling soit déjà fait).
+
+#### Deux méthodes de calcul : Gini vs Entropy
+
+Le Random Forest utilise deux critères différents pour sélectionner les meilleurs points de division (splits) à chaque nœud de l'arbre :
+
+**1. Gini Impurity (par défaut)**
+
+$$\text{Gini} = 1 - \sum_{i=1}^{C} p_i^2$$
+
+- $C$ : nombre de classes (ici 2 : refusé/accordé)
+- $p_i$ : proportion de la classe $i$ dans le nœud
+
+*Interprétation :* Mesure la "pureté" du nœud. Une valeur de 0 signifie que le nœud contient uniquement une classe (pur), une valeur proche de 0.5 signifie un mélange équilibré des deux classes (impur).
+
+**2. Entropy (Information Gain)**
+
+$$\text{Entropy} = -\sum_{i=1}^{C} p_i \log_2(p_i)$$
+
+*Interprétation :* Mesure l'information (ou l'incertitude) contenue dans le nœud. Une entropie élevée signifie une grande incertitude, une entropie faible signifie que le nœud est dominé par une classe.
+
+**Comparaison pratique :**
+
+| Aspect | Gini | Entropy |
+|--------|------|---------|
+| **Complexité computationnelle** | Plus rapide (simples calculs arithmétiques) | Légèrement plus lent (calculs logarithmiques) |
+| **Résultats empiriques** | Généralement similaires | Généralement similaires |
+| **Défaut dans scikit-learn** | ✓ Oui | Non (option) |
+| **Cas d'usage** | Recommandé pour la plupart des cas | Utilisé rarement ; principalement pour comparaison |
+
+**Comment choisir :**
+
+Dans la pratique, il y a peu de différence entre les deux méthodes. Le choix du critère a généralement un impact négligeable comparé à d'autres hyperparamètres comme `n_estimators` ou `max_depth`. 
+
+- Utiliser **Gini** (défaut) pour une exécution plus rapide.
+- Utiliser **Entropy** si vous avez une raison théorique spécifique ou souhaitez exploiter des concepts de théorie de l'information.
+
 
 **Hyperparamètres à optimiser :**
 *   `n_estimators` :
@@ -79,12 +229,79 @@ Ces méthodes construisent plusieurs modèles indépendants en parallèle et fon
     *   *Plage recommandée :* `[2, 5, 10]`.
 
 ### ExtraTreesClassifier (À faire)
-**Particularité :** Similaire au Random Forest, mais les seuils de coupure des nœuds sont choisis de manière totalement aléatoire (et non optimale).
-**Pourquoi ce modèle :** Cette injection d'aléatoire supplémentaire réduit souvent la variance davantage que le Random Forest et accélère l'entraînement.
+**Particularité :** Similaire au Random Forest structurellement, mais avec une différence fondamentale dans la sélection des seuils de coupure (split thresholds) aux nœuds de l'arbre.
+
+**Pourquoi ce modèle :** Cette différence algorithme introduit plus de stochasticité (aléatoire) dans le processus d'apprentissage, ce qui réduit souvent la variance davantage que le Random Forest et accélère significativement l'entraînement.
+
+#### Différence clé : Optimisation des splits
+
+**Random Forest (Optimisation gourmande - Greedy)**
+
+À chaque nœud, le Random Forest **recherche le seuil optimal** minimisant une métrique d'impureté (Gini ou Entropy) :
+
+$$\text{Best split} = \arg\min_{j, s} \left[ \text{Impureté}_{\text{gauche}}(j, s) + \text{Impureté}_{\text{droit}}(j, s) \right]$$
+
+**Processus :**
+1. Pour chaque feature $j$ du nœud
+2. Tester tous les seuils $s$ possibles (ou un sous-ensemble intelligent)
+3. Évaluer chaque split et choisir le meilleur
+4. **Coût computationnel élevé** : $O(\text{nb features} \times \text{nb seuils possibles})$
+
+**ExtraTreesClassifier (Seuils aléatoires)**
+
+ExtraTrees choisit à la place des seuils **aléatoirement** pour chaque feature et garde le meilleur parmi ces splits aléatoires :
+
+$$\text{Best split} = \arg\min_{j \in \text{random features}, s \in \text{random thresholds}} \left[ \text{Impureté}_{\text{gauche}}(j, s) + \text{Impureté}_{\text{droit}}(j, s) \right]$$
+
+**Processus :**
+1. Sélectionner aléatoirement un sous-ensemble de features
+2. Pour chaque feature, générer des seuils **aléatoires** (au lieu de les optimiser)
+3. Évaluer uniquement ces splits aléatoires
+4. Choisir le meilleur parmi ceux-ci
+5. **Coût computationnel réduit** : $O(\text{nb features aléatoires} \times \text{nb seuils aléatoires fixes})$
+
+#### Tableau comparatif : Random Forest vs ExtraTreesClassifier
+
+| Aspect | Random Forest | ExtraTreesClassifier |
+|--------|---------------|----------------------|
+| **Sélection des splits** | Optimale (recherche gourmande) | Aléatoire |
+| **Complexité computationnelle** | Élevée (O(n log n) par arbre) | Faible (O(n)) |
+| **Variance du modèle** | Moyenne | Faible (aléatoire réduit la variance) |
+| **Biais du modèle** | Bas | Légèrement plus haut |
+| **Temps d'entraînement** | Lent | Rapide |
+| **Parallelisation** | Possible mais moins efficace | Très efficace (moins de synchronisation) |
+| **Sensibilité au surapprentissage** | Moyennement sensible | Moins sensible (l'aléatoire régularise) |
+| **Performance typique** | Très bonne | Souvent comparable ou légèrement meilleure |
+| **Besoin de tuning** | Plus critique | Moins critique grâce à la régularisation implicite |
+
+#### Intuition graphique
+
+Imaginons une feature continue qui sépare les données :
+
+**Random Forest :** Teste le seuil à 5.2, 5.3, 5.5, ..., 8.9 et choisit 6.8 comme optimal.
+
+**ExtraTreesClassifier :** Génère 3 seuils aléatoires (disons 4.2, 6.9, 7.3) et choisit le meilleur parmi ces trois (par exemple 6.9).
+
+ExtraTrees ne trouve pas le "parfait" 6.8, mais son approche plus rapide et la diversité des arbres générés compensent cette "imprécision" locale.
+
+#### Quand choisir ExtraTreesClassifier ?
+
+✓ **Utiliser ExtraTreesClassifier si :**
+- Vous avez besoin d'une **exécution rapide** (données volumineuses)
+- Vous cherchez à **réduire le surapprentissage** naturellement
+- Les **ressources computationnelles sont limitées**
+- Vous tolérez une performance comparable ou légèrement inférieure en échange d'une grande vitesse
+
+✗ **Utiliser Random Forest si :**
+- La **précision est critique** et vous avez le budget computationnel
+- Les données sont **petites à moyennes** (< 100k lignes)
+- Vous avez besoin d'une **stabilité maximale**
 
 **Hyperparamètres à optimiser :**
 *   Identiques au Random Forest (`n_estimators`, `max_depth`, `min_samples_split`).
-*   *Stratégie :* On peut souvent se permettre des arbres légèrement plus profonds qu'en Random Forest car l'aléatoire protège partiellement du surapprentissage.
+*   *Stratégie spécifique :* On peut souvent se permettre des arbres légèrement plus profonds qu'en Random Forest (ex: `max_depth=[50, 70, 100]`) car le caractère aléatoire des splits protège partiellement du surapprentissage, agissant comme une **régularisation implicite**.
+*   *Recommandation :* Généralement, augmenter `n_estimators` pour ExtraTreesClassifier (ex: 500-1000) pour compenser la perte de précision individuelle des arbres.
+
 
 ---
 
