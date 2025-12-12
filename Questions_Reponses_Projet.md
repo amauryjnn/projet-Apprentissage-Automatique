@@ -345,8 +345,76 @@ Ce document recense **plus de 100 questions** techniques, méthodologiques et de
 **Q99 :** Dans le code PyTorch, pourquoi `input_dim` est-il dynamique ?
 **R99 :** `input_dim = X_train.shape[1]`. Cela permet au réseau de s'adapter automatiquement si on ajoute ou enlève des features (ex: via OneHotEncoding) sans devoir réécrire le code.
 
-**Q100 :** Avez-vous utilisé des environnements virtuels ?
-**R100 :** Oui (ou "J'aurais dû"), pour isoler les dépendances du projet et éviter les conflits de versions entre bibliothèques (ex: numpy vs pandas).
 
-**Q101 :** Qu'est-ce que le fichier `requirements.txt` ?
-**R101 :** La liste de toutes les dépendances et leurs versions, permettant à quelqu'un d'autre de réinstaller exactement le même environnement avec `pip install -r requirements.txt`.
+
+
+---
+
+## IX. Optimisation des Hyperparamètres Avancée
+
+**Q102 :** Vous avez utilisé `RandomizedSearchCV` et `HalvingGridSearchCV` pour les forêts aléatoires. Pourquoi ne pas s'être contenté de `GridSearchCV` ?
+**R102 :** `GridSearchCV` teste toutes les combinaisons possibles, ce qui est trop coûteux en temps de calcul pour des modèles complexes comme Random Forest. `RandomizedSearchCV` explore un nombre fixe de combinaisons aléatoires. `HalvingGridSearchCV` utilise une approche de tournoi (successive halving) : il entraîne les modèles sur peu de données, élimine les moins bons, et recommence avec plus de données.
+
+**Q103 :** Quel est le principe du `HalvingGridSearchCV` ?
+**R103 :** C'est une stratégie de recherche par "bandes". Il commence par entraîner tous les candidats sur un petit sous-ensemble de données. Seule la meilleure moitié (ou fraction définie par `factor`) des candidats est conservée pour l'itération suivante avec plus de données, jusqu'à utiliser tout le dataset.
+
+---
+
+## X. Nouveaux Modèles (AdaBoost, HistGradientBoosting)
+
+**Q104 :** Quelle est la différence fondamentale entre AdaBoost et les autres méthodes de Boosting utilisées (XGBoost, LightGBM) ?
+**R104 :** AdaBoost (Adaptive Boosting) fonctionne en ajustant les **poids des échantillons** : les observations mal classées par l'arbre précédent voient leur poids augmenter pour l'arbre suivant. XGBoost et LightGBM (Gradient Boosting) cherchent à prédire les **résidus** (l'erreur) du modèle précédent.
+
+**Q105 :** Pourquoi avoir testé `HistGradientBoostingClassifier` de Scikit-Learn ?
+**R105 :** C'est une implémentation inspirée de LightGBM qui utilise le binning (histogrammes) pour accélérer l'entraînement. Son avantage majeur est le support natif des valeurs manquantes (NaNs), évitant une étape d'imputation stricte.
+
+**Q106 :** Dans AdaBoost, pourquoi avoir choisi des `DecisionTreeClassifier` de faible profondeur (max_depth=3, 4, 5) ?
+**R106 :** Le principe du Boosting est d'assembler des "apprenants faibles" (weak learners). Des arbres peu profonds (stumps) ont une forte variance mais un biais élevé, que le boosting corrige itérativement. Des arbres trop profonds mèneraient immédiatement au surapprentissage.
+
+---
+
+## XI. Analyse des Erreurs et Ensemble Learning
+
+**Q107 :** Vous avez réalisé une analyse d'erreurs "Sample-wise" (par échantillon). Qu'avez-vous cherché à démontrer ?
+**R107 :** Nous voulions identifier si les erreurs étaient aléatoires ou structurelles. Si 7 modèles différents se trompent simultanément sur le même client, cela indique que la donnée est intrinsèquement difficile (ambiguë ou manque d'information) plutôt qu'un biais spécifique à un algorithme.
+
+**Q108 :** Quelle est la différence entre le "Hard Voting" et le "Soft Voting" que vous avez implémentés ?
+**R108 :** Le Hard Voting compte les votes de classe (0 ou 1) de chaque modèle et prend la majorité. Le Soft Voting fait la moyenne des probabilités prédites par chaque modèle, puis applique un seuil. Le Soft Voting est généralement plus nuancé mais nécessite des modèles bien calibrés.
+
+**Q109 :** Comment avez-vous identifié le modèle qui "tire l'ensemble vers le bas" ?
+**R109 :** En isolant les échantillons où l'Ensemble s'est trompé, puis en calculant le taux d'erreur individuel de chaque modèle sur ce sous-ensemble spécifique d'échecs.
+
+**Q110 :** Pourquoi combiner des modèles aussi différents (LogReg, RF, XGBoost) dans un Voting Classifier ?
+**R110 :** Pour la diversité. L'Ensemble Learning fonctionne mieux si les modèles font des erreurs décorrélées. Mélanger des modèles linéaires (LogReg), de bagging (RF) et de boosting (XGB) maximise cette diversité.
+
+---
+
+## XII. Détails Techniques Deep Learning (Complément)
+
+**Q111 :** Vous utilisez `CosineAnnealingLR` comme scheduler. Quel est son avantage par rapport à une réduction par palier ?
+**R111 :** Il réduit le learning rate selon une courbe cosinus, ce qui permet une descente plus fluide et évite les plateaux brutaux. Cela aide souvent le modèle à converger vers des minima plus larges et plus robustes.
+
+**Q112 :** Pourquoi avoir spécifié une initialisation `kaiming_uniform_` ?
+**R112 :** Cette initialisation (aussi appelée He initialization) est mathématiquement optimisée pour les réseaux utilisant des fonctions d'activation asymétriques comme ReLU, LeakyReLU ou GELU. Elle maintient la variance des activations à travers les couches pour éviter l'explosion ou la disparition du gradient au début de l'entraînement.
+
+**Q113 :** À quoi sert le paramètre `weight_decay` dans l'optimiseur AdamW ?
+**R113 :** C'est une régularisation L2 appliquée directement aux poids. Elle force les poids du réseau à rester petits, ce qui réduit la complexité du modèle et prévient le surapprentissage.
+
+---
+
+## XIII. Concepts Fondamentaux (Gradient & Optimisation)
+
+**Q114 :** Vous parlez souvent de "Gradient". Qu'est-ce que c'est concrètement ?
+**R114 :** Mathématiquement, c'est le vecteur des dérivées partielles. Intuitivement, c'est la **direction de la pente la plus raide** de la courbe d'erreur. Pour minimiser l'erreur du modèle, on déplace les paramètres dans la direction opposée au gradient : c'est la **Descente de Gradient**.
+
+**Q115 :** Quel est le lien entre le Gradient et vos modèles "Gradient Boosting" (XGBoost, LightGBM) ?
+**R115 :** Dans le Boosting, chaque nouvel arbre est entraîné pour prédire le **gradient négatif** de la fonction de perte (loss function) par rapport aux prédictions précédentes. En termes simples, le gradient indique à l'arbre "dans quelle direction et avec quelle force" corriger l'erreur pour chaque échantillon.
+
+**Q116 :** Et comment le Gradient intervient-il dans votre Réseau de Neurones (PyTorch) ?
+**R116 :** Il est au cœur de l'apprentissage via la **Rétropropagation** (Backpropagation). On calcule le gradient de l'erreur par rapport à chaque poids du réseau, puis l'optimiseur (ici AdamW) met à jour les poids pour réduire cette erreur.
+
+**Q117 :** Ne pas confondre "Gradient Descent" et "Grid Search". Quelle est la différence ?
+**R117 :** Ce sont deux processus distincts :
+*   **Gradient Descent** : C'est le moteur interne qui entraîne le modèle (ajuste les poids pour apprendre).
+
+Grid Search : C'est une boucle externe qui teste différentes configurations (hyperparamètres) pour trouver la meilleure architecture avant l'entraînement.
